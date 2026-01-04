@@ -15,14 +15,22 @@ pipeline {
 
     stage('Docker Login') {
       steps {
-        withCredentials([
-          usernamePassword(
-            credentialsId: 'dockerhub-creds',
-            usernameVariable: 'DOCKER_USER',
-            passwordVariable: 'DOCKER_PASS'
-          )
-        ]) {
-          sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+        script {
+          try {
+            withCredentials([
+              usernamePassword(
+                credentialsId: 'dockerhub-creds',
+                usernameVariable: 'DOCKER_USER',
+                passwordVariable: 'DOCKER_PASS'
+              )
+            ]) {
+              sh '''
+                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+              '''
+            }
+          } catch (err) {
+            echo "WARNING: Docker login failed. Some stages may not work: ${err}"
+          }
         }
       }
     }
@@ -63,46 +71,46 @@ pipeline {
           kubectl create namespace hospital --dry-run=client -o yaml | kubectl apply -f -
 
           kubectl apply -n hospital -f - <<EOF
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: mysql
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: mysql
-            template:
-              metadata:
-                labels:
-                  app: mysql
-              spec:
-                containers:
-                - name: mysql
-                  image: mysql:8.0
-                  env:
-                  - name: MYSQL_ROOT_PASSWORD
-                    value: pass123
-                  - name: MYSQL_DATABASE
-                    value: hospital
-                  - name: MYSQL_USER
-                    value: user
-                  - name: MYSQL_PASSWORD
-                    value: pass123
-                  ports:
-                  - containerPort: 3306
-          ---
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: mysql
-          spec:
-            selector:
-              app: mysql
-            ports:
-            - port: 3306
-              targetPort: 3306
-          EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: pass123
+        - name: MYSQL_DATABASE
+          value: hospital
+        - name: MYSQL_USER
+          value: user
+        - name: MYSQL_PASSWORD
+          value: pass123
+        ports:
+        - containerPort: 3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  selector:
+    app: mysql
+  ports:
+  - port: 3306
+    targetPort: 3306
+EOF
         '''
       }
     }
@@ -122,26 +130,5 @@ pipeline {
     stage('Deploy Patient API') {
       steps {
         sh '''
-          helm upgrade --install patient-api ./hpm \
-            --namespace hospital \
-            -f hpm/values-patient.yaml \
-            --set image.tag=${BUILD_ID} \
-            --set imagePullSecrets[0].name=dockerhub-secret
-        '''
-      }
-    }
+          helm upgrade
 
-    stage('Deploy Appointment API') {
-      steps {
-        sh '''
-          helm upgrade --install appointment-api ./hpm \
-            --namespace hospital \
-            -f hpm/values-appoint.yaml \
-            --set image.tag=${BUILD_ID} \
-            --set imagePullSecrets[0].name=dockerhub-secret
-        '''
-      }
-    }
-
-  } // closes stages
-} // closes pipeline
