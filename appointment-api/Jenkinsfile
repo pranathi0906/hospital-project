@@ -140,3 +140,8 @@ pipeline {
             --set image.tag=${BUILD_ID} \
             --set imagePullSecrets[0].name=dockerhub-secret
         '''
+      }
+    }
+
+  } // closes stages
+} // closes pipeline
