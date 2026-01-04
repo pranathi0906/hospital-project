@@ -19,7 +19,7 @@ pipeline {
           try {
             withCredentials([
               usernamePassword(
-                credentialsId: 'dockerhub-creds',
+                credentialsId: 'dockerhub-jenkins',
                 usernameVariable: 'DOCKER_USER',
                 passwordVariable: 'DOCKER_PASS'
               )
@@ -130,5 +130,27 @@ EOF
     stage('Deploy Patient API') {
       steps {
         sh '''
-          helm upgrade
+          helm upgrade --install patient-api ./hpm \
+            --namespace hospital \
+            -f hpm/values-patient.yaml \
+            --set image.tag=${BUILD_ID} \
+            --set imagePullSecrets[0].name=dockerhub-secret
+        '''
+      }
+    }
+
+    stage('Deploy Appointment API') {
+      steps {
+        sh '''
+          helm upgrade --install appointment-api ./hpm \
+            --namespace hospital \
+            -f hpm/values-appoint.yaml \
+            --set image.tag=${BUILD_ID} \
+            --set imagePullSecrets[0].name=dockerhub-secret
+        '''
+      }
+    }
+
+  } // closes stages
+} // closes pipeline
 
